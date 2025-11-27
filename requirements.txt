@@ -1,0 +1,5 @@
+streamlit
+polars
+httpx
+altair
+pandas
