@@ -1,0 +1,51 @@
+name: Daily NHL Data Refresh
+
+on:
+  schedule:
+    # Runs at 09:00 UTC daily (4:00 AM EST / 5:00 AM EDT)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip' # OPTIONAL: Makes the workflow run faster by caching libraries
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # install pyarrow explicitly just in case it's missing from requirements
+        pip install httpx polars altair pyarrow
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run Data Pipeline
+      run: |
+        # Runs the pipeline in refresh mode
+        # We look back 2 days to ensure late-night West Coast games are captured
+        python nhl_pipeline.py refresh --days 2
+
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        
+        # Check if any files in the data/ directory have changed
+        if [[ -n $(git status -s data/) ]]; then
+          git add data/
+          git commit -m "Daily data refresh: $(date +'%Y-%m-%d')"
+          git push
+        else
+          echo "No new data found. Skipping commit."
+        fi
