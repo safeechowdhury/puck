@@ -660,7 +660,7 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
     with col_head:
         st.subheader(f"{stat_label} - Line: {threshold}")
     with col_opt:
-        mobile_view = st.checkbox("Mobile View", value=True, help("Reduces columns for small screens"))
+        mobile_view = st.checkbox("Mobile View", value=True, help="Reduces columns for small screens")
 
     away_team, home_team = selected_matchup.split(" @ ")
     teams = [home_team, away_team]
