@@ -5,9 +5,9 @@ import datetime
 import glob
 from pathlib import Path
 
-# --- 1. Refined Minimalist Styling ---
+# --- 1. Refined Minimalist Styling with Mobile Responsiveness ---
 def load_minimalist_style():
-    """Injects custom CSS for a black theme with gold accents."""
+    """Injects custom CSS for a black theme with responsive adjustments."""
     st.markdown("""
         <style>
         /* Base */
@@ -16,23 +16,52 @@ def load_minimalist_style():
             color: #FAFAFA !important;
         }
         
-        /* Sidebar */
+        /* Sidebar Border */
         .st-emotion-cache-16txtl3 {
             border-right: 1px solid rgba(255, 193, 7, 0.3);
         }
 
         /* Highlight selected radio button */
         div[role="radiogroup"] > label:has(input:checked) {
-            outline: 2px solid #FFC107 !important; /* Gold highlight */
+            outline: 2px solid #FFC107 !important;
             outline-offset: 2px;
             border-radius: 5px;
             padding: 4px;
-            background-color: rgba(255, 193, 7, 0.1); /* Faint gold background */
+            background-color: rgba(255, 193, 7, 0.1);
         }
         
-        /* Make dataframe more compact */
+        /* Base Dataframe font */
         .stDataFrame {
             font-size: 13px;
+        }
+
+        /* --- MOBILE OPTIMIZATIONS --- */
+        @media only screen and (max-width: 600px) {
+            /* Reduce padding on mobile so content uses full width */
+            .block-container {
+                padding-top: 2rem !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            
+            /* Make dataframe font smaller on mobile to fit more columns */
+            .stDataFrame { font-size: 11px; }
+            
+            /* Adjust metric text size */
+            div[data-testid="stMetricValue"] {
+                font-size: 1.2rem !important;
+            }
+            
+            /* Center images on mobile */
+            div[data-testid="stImage"] {
+                display: flex;
+                justify-content: center;
+            }
+
+            /* Adjust chart padding */
+            canvas {
+                max-width: 100% !important;
+            }
         }
         </style>
     """, unsafe_allow_html=True)
@@ -168,7 +197,7 @@ def load_player_rosters():
 
 # --- 3. Charting Functions ---
 def create_primary_chart(data: pl.DataFrame, y_col: str, title: str, threshold: float):
-    """Creates the main Altair bar chart."""
+    """Creates the main Altair bar chart with responsive settings."""
     if data.is_empty():
         return
         
@@ -179,30 +208,29 @@ def create_primary_chart(data: pl.DataFrame, y_col: str, title: str, threshold: 
         (pl.col('date').dt.strftime('%m/%d') + " vs " + pl.col('opponent')).alias('display_date')
     )
     
-    # REVISION: Determine format based on stat type
     is_integer_stat = y_col in [
         'shots', 'shot_attempts', 'points', 'goals', 'assists', 
         'blocked_shots', 'hits', 'giveaways', 'takeaways', 'shifts',
         'saves', 'shots_against', 'goals_against', 'plus_minus', 'pim',
-        'faceoff_wins', 'faceoff_losses', 'ppg', 'ppa', 'ppp',
+        'faceoff_wins', 'faceoff_losses', 'ppg', 'ppa', 'ppp', 
         'missed_shots', 'offensive_blocked_shots'
     ]
-    stat_format = "d" if is_integer_stat else ".1f" # "d" for integer, ".1f" for float
+    stat_format = "d" if is_integer_stat else ".1f"
     
     tooltip = [
         alt.Tooltip("date:T", title="Date", format="%Y-%m-%d"), 
-        alt.Tooltip(f"{y_col}:Q", title=title, format=stat_format) # Use dynamic format
+        alt.Tooltip(f"{y_col}:Q", title=title, format=stat_format)
     ]
 
     base = alt.Chart(chart_data).properties(
-        width='container',
-        height=380
+        width='container', 
+        height=350 
     )
 
     color_condition = alt.condition(
         f"datum['{y_col}'] >= {threshold}",
         alt.value("#2E8B57"), # Green
-        alt.value("#CD5C5C")  # Red
+        alt.value("#CD5C5C")  # Red for bars (Keep this as is, only line changes)
     )
 
     text = base.mark_text(
@@ -210,31 +238,35 @@ def create_primary_chart(data: pl.DataFrame, y_col: str, title: str, threshold: 
         baseline='bottom',
         dx=0,
         dy=-4,
-        fontSize=11,
+        fontSize=10,
         color="white" 
     ).encode(
-        x=alt.X("display_date:N", sort=None, title=None, axis=alt.Axis(labels=True, ticks=True, domain=False, labelAngle=-45, labelFontSize=10)),
+        x=alt.X("display_date:N", sort=None, title=None, axis=alt.Axis(labels=True, ticks=True, domain=False, labelAngle=-90, labelFontSize=9)),
         y=alt.Y(f"{y_col}:Q", title=None, scale=alt.Scale(domain=[0, y_domain_max])),
-        text=alt.Text(f"{y_col}:Q", format=stat_format), # Use dynamic format
+        text=alt.Text(f"{y_col}:Q", format=stat_format),
         tooltip=tooltip
     )
 
     bars = base.mark_bar(opacity=0.9, cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
-        x=alt.X("display_date:N", sort=None, title=None, axis=alt.Axis(labels=True, ticks=True, domain=False, labelAngle=-45, labelFontSize=10)),
-        y=alt.Y(f"{y_col}:Q", title=title, axis=alt.Axis(labels=True, ticks=True, domain=False, titleFontSize=12), scale=alt.Scale(domain=[0, y_domain_max])),
+        x=alt.X("display_date:N", sort=None, title=None, axis=alt.Axis(labels=True, ticks=True, domain=False, labelAngle=-90, labelFontSize=9)),
+        y=alt.Y(f"{y_col}:Q", title=title, axis=alt.Axis(labels=True, ticks=True, domain=False, titleFontSize=11), scale=alt.Scale(domain=[0, y_domain_max])),
         color=color_condition,
         tooltip=tooltip
     )
 
+    # --- REVISION: Set Threshold Line to Red ---
     thresh_line = alt.Chart(pl.DataFrame({'y': [threshold]})).mark_rule(
         strokeDash=[5,5],
-        size=2
+        size=2,
+        color="#FF0000"  # Explicitly Red
     ).encode(y='y:Q')
 
     chart = (bars + text + thresh_line).configure_view(
         strokeWidth=0
+    ).properties(
+        autosize=alt.AutoSizeParams(type='fit', contains='padding')
     )
-    st.altair_chart(chart, width='stretch', theme="streamlit")
+    st.altair_chart(chart, use_container_width=True, theme="streamlit")
 
 def create_secondary_chart(data: pl.DataFrame, y_col: str, title: str, avg_val: float):
     """Creates a secondary bar chart with proper height."""
@@ -245,19 +277,18 @@ def create_secondary_chart(data: pl.DataFrame, y_col: str, title: str, avg_val: 
         pl.col('date').dt.strftime('%m/%d').alias('display_date')
     )
     
-    # REVISION: Determine format based on stat type
     is_integer_stat = y_col in [
         'shots', 'shot_attempts', 'points', 'goals', 'assists', 
         'blocked_shots', 'hits', 'giveaways', 'takeaways', 'shifts',
         'saves', 'shots_against', 'goals_against', 'plus_minus', 'pim',
-        'faceoff_wins', 'faceoff_losses', 'ppg', 'ppa', 'ppp',
+        'faceoff_wins', 'faceoff_losses', 'ppg', 'ppa', 'ppp', 
         'missed_shots', 'offensive_blocked_shots'
     ]
-    stat_format = "d" if is_integer_stat else ".1f" # "d" for integer, ".1f" for float
+    stat_format = "d" if is_integer_stat else ".1f"
     
     tooltip = [
         alt.Tooltip("date:T", title="Date", format="%Y-%m-%d"), 
-        alt.Tooltip(f"{y_col}:Q", format=stat_format) # Use dynamic format
+        alt.Tooltip(f"{y_col}:Q", format=stat_format)
     ]
     
     base = alt.Chart(chart_data).properties(
@@ -282,9 +313,11 @@ def create_secondary_chart(data: pl.DataFrame, y_col: str, title: str, avg_val: 
     
     chart = (bars + avg_line).configure_view(
         strokeWidth=0
+    ).properties(
+        autosize=alt.AutoSizeParams(type='fit', contains='padding')
     )
     
-    st.altair_chart(chart, width='stretch', theme="streamlit")
+    st.altair_chart(chart, use_container_width=True, theme="streamlit")
 
 # --- 4. Compute Player Stats ---
 @st.cache_data
@@ -295,7 +328,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     hockey_today = datetime.date.today()
     is_future_game = selected_date >= hockey_today
     
-    # Get player list - single operation
+    # Get player list
     if is_future_game:
         player_list_df = player_roster_df.filter(pl.col("team_abbrev").is_in(teams))
     else:
@@ -310,7 +343,6 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     if player_list_df.is_empty():
         return pl.DataFrame()
     
-    # Filter by player type in one operation
     position_filter = pl.col("position_code") == "G" if player_type == "Goalie" else pl.col("position_code") != "G"
     player_list_df = player_list_df.filter(position_filter)
     
@@ -319,7 +351,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     
     player_ids = player_list_df.get_column("player_id").unique().to_list()
     
-    # Get all historical data in one filter operation
+    # Get all historical data
     player_data = (
         full_df
         .filter(pl.col("player_id").is_in(player_ids) & (pl.col("date") <= selected_date))
@@ -327,24 +359,21 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     )
     
     if player_data.is_empty():
-        # Return empty df with expected columns for joins
         return pl.DataFrame(schema=player_list_df.schema)
     
-    # Determine current season from selected_date, not from player data
     if selected_date.month >= 9:
         current_season = int(f"{selected_date.year}{selected_date.year + 1}")
     else:
         current_season = int(f"{selected_date.year - 1}{selected_date.year}")
     
-    # Pre-calculate hit column once for reuse
     player_data = player_data.with_columns(
         (pl.col(stat_col) >= threshold).alias("is_hit")
     )
     
-    # Season stats - optimized aggregation
+    # Season stats
     season_stats = (
         player_data
-        .filter(pl.col("season") == current_season) # Uses corrected current_season
+        .filter(pl.col("season") == current_season)
         .group_by("player_id")
         .agg([
             pl.len().alias("season_games"),
@@ -353,7 +382,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
         .with_columns((pl.col("season_hits") / pl.col("season_games") * 100).alias("season_pct"))
     )
     
-    # H2H stats - conditional on number of teams
+    # H2H stats
     if len(teams) == 2:
         h2h_stats = (
             player_data
@@ -372,7 +401,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     else:
         h2h_stats = pl.DataFrame()
     
-    # Last N stats - single aggregation with conditional sums
+    # Last N stats
     last_n_stats = (
         player_data
         .with_columns(pl.col("date").rank("dense", descending=True).over("player_id").alias("game_rank"))
@@ -392,20 +421,19 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
         ])
     )
     
-    # REVISION: Location stats - pivot on both values and games (for current season)
+    # Location stats
     location_stats = (
         player_data
-        .filter(pl.col("season") == current_season) # Filter for current season
+        .filter(pl.col("season") == current_season)
         .group_by(["player_id", "location"])
         .agg([
             pl.col("is_hit").sum().alias("hits"),
             pl.len().alias("games")
         ])
         .with_columns((pl.col("hits") / pl.col("games") * 100).alias("hit_pct"))
-        .pivot(index="player_id", on="location", values=["hit_pct", "games"]) # Pivot on both
+        .pivot(index="player_id", on="location", values=["hit_pct", "games"])
     )
     
-    # REVISION: Safely rename columns if they exist, handling pivoted names
     if "hit_pct_away" in location_stats.columns:
         location_stats = location_stats.rename({"hit_pct_away": "away_season_pct"})
     else:
@@ -426,7 +454,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     else:
         location_stats = location_stats.with_columns(pl.lit(0).alias("home_season_games"))
     
-    # Combine all stats with single join chain
+    # Combine all stats
     result_df = (
         player_list_df
         .select(["player_id", "player_name", "team_abbrev", "position_code"])
@@ -450,15 +478,13 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
             pl.col("h2h_pct").fill_null(0.0)
         ])
         
-    # REVISION: Fill nulls for games columns before formatting
     result_df = result_df.with_columns([
         pl.col(c).fill_null(0) for c in ["season_games", "l5_games", "l10_games", "l20_games", "away_season_games", "home_season_games"]
     ])
     
-    # Format display - batch all format operations
+    # Format display
     display_df = result_df.with_columns([
         pl.lit(threshold).alias("Line"),
-        # REVISION: Renamed text columns to "(Formatted)"
         pl.when(pl.col("season_games") > 0)
           .then(pl.format("{}% ({}g)", pl.col("season_pct").round(0).cast(pl.Int32), pl.col("season_games")))
           .otherwise(pl.lit("n/a")).alias("Season (Formatted)"),
@@ -481,7 +507,6 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
           .then(pl.format("{}% ({}g)", pl.col("home_season_pct").round(0).cast(pl.Int32), pl.col("home_season_games")))
           .otherwise(pl.lit("n/a")).alias("Home (Season) (Formatted)"),
           
-        # REVISION: Renamed sort columns to "%" and use None for n/a
         pl.when(pl.col("season_games") > 0).then(pl.col("season_pct")).otherwise(pl.lit(None)).alias("Season %"),
         pl.when(pl.col("h2h_games") > 0).then(pl.col("h2h_pct")).otherwise(pl.lit(None)).alias("H2H %"),
         pl.when(pl.col("l5_games") >= 5).then(pl.col("l5_pct")).otherwise(pl.lit(None)).alias("L5 %"),
@@ -520,11 +545,11 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
     matchup_options = ["Select matchup..."]
     if not schedule_for_date.is_empty():
         matchups = (schedule_for_date
-                   .sort("game_id")
-                   .select((pl.col("away_abbrev") + " @ " + pl.col("home_abbrev")).alias("matchup"))
-                   .unique(maintain_order=True)
-                   .get_column("matchup")
-                   .to_list())
+                    .sort("game_id")
+                    .select((pl.col("away_abbrev") + " @ " + pl.col("home_abbrev")).alias("matchup"))
+                    .unique(maintain_order=True)
+                    .get_column("matchup")
+                    .to_list())
         matchup_options.extend(matchups)
     
     selected_matchup_index = 0
@@ -532,13 +557,13 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
         try:
             selected_matchup_index = matchup_options.index(st.session_state.selected_matchup)
         except ValueError:
-            st.session_state.selected_matchup = None # Clear if matchup no longer valid for date
+            st.session_state.selected_matchup = None
             
     selected_matchup = st.sidebar.selectbox("Matchup", matchup_options, index=selected_matchup_index)
     st.session_state.selected_matchup = selected_matchup
     
     if selected_matchup == "Select matchup...":
-        st.session_state.selected_player_id = None # Clear player if matchup changes
+        st.session_state.selected_player_id = None
         return selected_date, None, None, None, None, None, None, None
     
     # 3. Player Type
@@ -598,7 +623,7 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
         for row in player_list_df.iter_rows(named=True):
             player_options.append((row["player_id"], row["player_name"]))
     
-    # Check session state for selected player
+    # Check session state
     current_player_id = st.session_state.get("selected_player_id")
     default_index = 0
     if current_player_id:
@@ -606,7 +631,7 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
         if current_player_id in valid_player_ids:
             default_index = valid_player_ids.index(current_player_id)
         else:
-            st.session_state.selected_player_id = None # Clear if player not in new list
+            st.session_state.selected_player_id = None
     
     selected_player_id = st.sidebar.selectbox(
         "Player",
@@ -615,7 +640,6 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
         format_func=lambda pid: next((name for p_id, name in player_options if p_id == pid), "Select player...")
     )
     
-    # Update session state if changed
     if selected_player_id != current_player_id:
         st.session_state.selected_player_id = selected_player_id if selected_player_id else None
     
@@ -628,10 +652,16 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
 
 def render_matchup_overview(full_df, player_roster_df, selected_date, selected_matchup, 
                            player_type, stat_col, threshold, stat_label):
-    """Render matchup overview table."""
+    """Render matchup overview table with Mobile optimization."""
     st.header("Matchup Overview")
-    st.subheader(f"{stat_label} - Line: {threshold}")
     
+    # 1. Mobile View Toggle
+    col_head, col_opt = st.columns([3, 1])
+    with col_head:
+        st.subheader(f"{stat_label} - Line: {threshold}")
+    with col_opt:
+        mobile_view = st.checkbox("Mobile View", value=True, help("Reduces columns for small screens"))
+
     away_team, home_team = selected_matchup.split(" @ ")
     teams = [home_team, away_team]
     
@@ -644,52 +674,57 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
         st.warning("No player data available for this matchup.")
         return
     
-    # REVISION: Add default sort by L10 % descending, with nulls last
     stats_df = stats_df.sort("L10 %", descending=True, nulls_last=True)
     
-    # REVISION: Column config - Use `sort_by` to link text cols to hidden numeric cols
-    column_config = {
-        "Player": st.column_config.TextColumn("Player", width="medium"),
-        "Team": st.column_config.TextColumn("Team"),
-        "Pos": st.column_config.TextColumn("Pos"),
+    # 2. Dynamic Column Configuration
+    base_config = {
+        "Player": st.column_config.TextColumn("Player", width="small" if mobile_view else "medium"),
+        "Team": st.column_config.TextColumn("Team", width="small"),
+        "Pos": st.column_config.TextColumn("Pos", width="small"),
         "Line": st.column_config.NumberColumn("Line", format="%.1f"),
-        
-        # REVISION: Configure all new columns
-        "Season (Formatted)": st.column_config.TextColumn("Season"),
-        "Season %": st.column_config.NumberColumn("Season %", format="%.0f%%"),
-        
-        "H2H (Formatted)": st.column_config.TextColumn("H2H"),
-        "H2H %": st.column_config.NumberColumn("H2H %", format="%.0f%%"),
+        "player_id": None
+    }
 
+    l_stats = {
         "L5 (Formatted)": st.column_config.TextColumn("L5"),
         "L5 %": st.column_config.NumberColumn("L5 %", format="%.0f%%"),
-
         "L10 (Formatted)": st.column_config.TextColumn("L10"),
         "L10 %": st.column_config.NumberColumn("L10 %", format="%.0f%%"),
-
         "L20 (Formatted)": st.column_config.TextColumn("L20"),
         "L20 %": st.column_config.NumberColumn("L20 %", format="%.0f%%"),
-
-        "Away (Season) (Formatted)": st.column_config.TextColumn("Away (Season)"),
-        "Away %": st.column_config.NumberColumn("Away %", format="%.0f%%"),
-        
-        "Home (Season) (Formatted)": st.column_config.TextColumn("Home (Season)"),
-        "Home %": st.column_config.NumberColumn("Home %", format="%.0f%%"),
-        
-        "player_id": None # Hide player_id
     }
     
+    season_stats = {
+        "Season (Formatted)": st.column_config.TextColumn("Season"),
+        "Season %": st.column_config.NumberColumn("Season %", format="%.0f%%"),
+        "H2H (Formatted)": st.column_config.TextColumn("H2H"),
+        "H2H %": st.column_config.NumberColumn("H2H %", format="%.0f%%"),
+        "Away (Season) (Formatted)": st.column_config.TextColumn("Away"),
+        "Away %": st.column_config.NumberColumn("Away %", format="%.0f%%"),
+        "Home (Season) (Formatted)": st.column_config.TextColumn("Home"),
+        "Home %": st.column_config.NumberColumn("Home %", format="%.0f%%"),
+    }
+
+    if mobile_view:
+        # Reduced columns for mobile
+        visible_cols = ["player_id", "Player", "Team", "Line", "L5 (Formatted)", "L10 (Formatted)", "L20 (Formatted)", "Season %"]
+        final_config = {**base_config, **l_stats, "Season %": st.column_config.NumberColumn("Szn %", format="%.0f%%")}
+    else:
+        # All columns for desktop
+        visible_cols = stats_df.columns
+        final_config = {**base_config, **l_stats, **season_stats}
+
+    # 3. Render Dataframe with container width
     event = st.dataframe(
-        stats_df,
-        width='stretch',
+        stats_df.select([c for c in visible_cols if c in stats_df.columns]),
+        use_container_width=True,
         height=600,
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        column_config=column_config
+        column_config=final_config
     )
     
-    # Handle row selection
     if event.selection.rows:
         selected_row_idx = event.selection.rows[0]
         selected_player_id = stats_df.row(selected_row_idx, named=True)["player_id"]
@@ -697,13 +732,12 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
         st.rerun()
 
 def render_main_content(full_df, schedule_df, player_roster_df, selected_date, 
-                       selected_player_id, player_position, selected_stat, threshold,
-                       stat_label, selected_matchup):
+                        selected_player_id, player_position, selected_stat, threshold,
+                        stat_label, selected_matchup):
     """Renders the main content area of the application."""
     # Get player info
     player_meta = player_roster_df.filter(pl.col("player_id") == selected_player_id)
     if player_meta.is_empty():
-        # Fallback to full_df if not in current roster (e.g., old game)
         player_meta_hist = full_df.filter(pl.col("player_id") == selected_player_id).select(["player_id", "player_name", "team"]).unique("player_id")
         if not player_meta_hist.is_empty():
             selected_player_name = player_meta_hist.item(0, "player_name")
@@ -737,12 +771,9 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
             st.subheader(f"{player_team} {game_location} {opponent_team}")
         st.subheader(f"{stat_label} - Line: {threshold}")
 
-
     st.divider()
 
     # --- Filter Bar ---
-    
-    # Determine seasons based on selected date
     if selected_date.month >= 9:
         current_season_id = int(f"{selected_date.year}{selected_date.year + 1}")
         prev_season_id = int(f"{selected_date.year - 1}{selected_date.year}")
@@ -756,7 +787,6 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
 
     f_col1, f_col2, f_col3 = st.columns(3)
     with f_col1:
-        # Game Filter Options
         filter_options = [
             f"{curr_season_label} (This Season)",
             "H2H",
@@ -774,10 +804,8 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
         rest_days_filter = st.selectbox("Rest Days", ["Any", "0", "1", "2", "3+"], index=0)
         
     # --- Data Filtering ---
-    # 1. Base Filter: Player
     analysis_df = full_df.filter(pl.col("player_id") == selected_player_id).sort("date", descending=True)
     
-    # 2. Scope Filter (Game Filter)
     if "This Season" in game_filter:
         analysis_df = analysis_df.filter(pl.col("season") == current_season_id)
     elif "Last Season" in game_filter:
@@ -794,7 +822,6 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
         except:
             pass
 
-    # 3. Attribute Filters (Location, Rest)
     attr_filter_expr = []
     if location_filter != "Any":
         attr_filter_expr.append(pl.col("location") == location_filter.lower())
@@ -816,7 +843,6 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
         hit_count = df.filter(pl.col(stat_col) >= thresh).height
         return (hit_count / df.height) * 100, df.height
 
-    # Determine current season from selected_date
     if selected_date.month >= 9:
         current_season = int(f"{selected_date.year}{selected_date.year + 1}")
     else:
@@ -830,12 +856,15 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
     l5_hit, l5_games = calc_hit_rate(analysis_df.head(5), selected_stat, threshold)
     l10_hit, l10_games = calc_hit_rate(analysis_df.head(10), selected_stat, threshold)
     
-    kpi_cols = st.columns(4)
-    kpi_cols[0].metric(f"Season ({season_games} g)", f"{season_hit:.0f}%")
-    kpi_cols[1].metric(f"vs {opponent_team} ({h2h_games} g)" if opponent_team else "H2H", 
+    # Responsive grid for KPIs (2 sets of 2 cols stacks better on mobile)
+    kpi_row1 = st.columns(2)
+    kpi_row1[0].metric(f"Season ({season_games} g)", f"{season_hit:.0f}%")
+    kpi_row1[1].metric(f"vs {opponent_team} ({h2h_games} g)" if opponent_team else "H2H", 
                        f"{h2h_hit:.0f}%" if h2h_games > 0 else "n/a")
-    kpi_cols[2].metric(f"Last 5 ({l5_games} g)", f"{l5_hit:.0f}%")
-    kpi_cols[3].metric(f"Last 10 ({l10_games} g)", f"{l10_hit:.0f}%")
+    
+    kpi_row2 = st.columns(2)
+    kpi_row2[0].metric(f"Last 5 ({l5_games} g)", f"{l5_hit:.0f}%")
+    kpi_row2[1].metric(f"Last 10 ({l10_games} g)", f"{l10_hit:.0f}%")
 
     # --- Charting Section ---
     st.divider()
@@ -868,7 +897,7 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
     # --- Game Logs ---
     st.divider()
     with st.expander("View Game Logs"):
-        st.dataframe(analysis_df.head(50), width='stretch', hide_index=True)
+        st.dataframe(analysis_df.head(50), use_container_width=True, hide_index=True)
 
 def main():
     st.set_page_config(layout="wide", page_title="NHL Dashboard v2")
@@ -895,7 +924,7 @@ def main():
     if sidebar_result[1] is None or sidebar_result[1] == "Select matchup...":
         st.header("NHL Player Analytics")
         st.info("Select a date and matchup from the sidebar to get started.")
-        st.session_state.selected_player_id = None # Ensure player is cleared
+        st.session_state.selected_player_id = None
         return
     
     (selected_date, selected_matchup, player_type, stat, 
@@ -903,7 +932,6 @@ def main():
     
     # Check if player is selected
     if selected_player_id:
-        # Render player analysis
         render_main_content(
             full_df, schedule_df, player_roster_df, 
             selected_date, selected_player_id, 
@@ -911,12 +939,10 @@ def main():
             selected_matchup
         )
         
-        # Add button to go back to matchup overview
         if st.button("← Back to Matchup Overview"):
             st.session_state.selected_player_id = None
             st.rerun()
     else:
-        # Show matchup overview table
         render_matchup_overview(
             full_df, player_roster_df, 
             selected_date, selected_matchup, player_type, 
