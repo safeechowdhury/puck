@@ -90,7 +90,8 @@ def load_all_data():
             schedule_df = pl.concat([
                 pl.scan_parquet(f).select([
                     'game_id', 'date', 'season', 'game_type', 
-                    'home_abbrev', 'away_abbrev', 'home_score', 'away_score'
+                    'home_abbrev', 'away_abbrev', 'home_score', 'away_score',
+                    'start_time', 'venue'
                 ]) for f in schedule_files
             ]).unique(subset=["game_id"]).collect()
         except Exception:
@@ -532,6 +533,42 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
     return display_df
 
 # --- 5. Main Application ---
+def render_game_selection_table(schedule_df, selected_date):
+    """Renders a table of games for the selected date to allow selection."""
+    st.header(f"Games for {selected_date.strftime('%Y-%m-%d')}")
+    
+    daily_games = schedule_df.filter(pl.col("date") == selected_date)
+    
+    if daily_games.is_empty():
+        st.info("No games scheduled for this date.")
+        return
+
+    # Process for display
+    display_df = daily_games.with_columns([
+        pl.col("start_time").str.strptime(pl.Datetime, "%Y-%m-%dT%H:%M:%SZ").dt.convert_time_zone("America/New_York").dt.strftime("%I:%M %p").alias("Time (EST)"),
+        (pl.col("away_abbrev") + " @ " + pl.col("home_abbrev")).alias("Matchup"),
+        pl.col("venue").fill_null("Unknown").alias("Venue")
+    ]).sort("start_time").select([
+        "Time (EST)", "home_abbrev", "away_abbrev", "Venue", "Matchup"
+    ]).rename({
+        "home_abbrev": "Home",
+        "away_abbrev": "Away"
+    })
+
+    event = st.dataframe(
+        display_df.select(["Time (EST)", "Home", "Away", "Venue"]),
+        width="stretch",
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+
+    if event.selection.rows:
+        selected_row_idx = event.selection.rows[0]
+        selected_matchup = display_df.row(selected_row_idx, named=True)["Matchup"]
+        st.session_state.selected_matchup = selected_matchup
+        st.rerun()
+
 def render_sidebar(full_df, schedule_df, player_roster_df):
     """Renders the sidebar controls."""
     st.sidebar.header("Controls")
@@ -717,7 +754,7 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
     # 3. Render Dataframe with container width
     event = st.dataframe(
         stats_df.select([c for c in visible_cols if c in stats_df.columns]),
-        use_container_width=True,
+        width="stretch",
         height=600,
         hide_index=True,
         on_select="rerun",
@@ -922,8 +959,7 @@ def main():
     
     # Check if matchup selected
     if sidebar_result[1] is None or sidebar_result[1] == "Select matchup...":
-        st.header("NHL Player Analytics")
-        st.info("Select a date and matchup from the sidebar to get started.")
+        render_game_selection_table(schedule_df, sidebar_result[0])
         st.session_state.selected_player_id = None
         return
     

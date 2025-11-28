@@ -79,6 +79,8 @@ SCHEDULE_SCHEMA = {
     "away_score": pl.Int64,
     "home_abbrev": pl.Utf8,
     "home_score": pl.Int64,
+    "start_time": pl.Utf8,
+    "venue": pl.Utf8,
 }
 
 BOXSCORE_SCHEMA = {
@@ -269,6 +271,8 @@ async def fetch_team_schedule(
                 "away_score": game.get("awayTeam", {}).get("score", 0),
                 "home_abbrev": game.get("homeTeam", {}).get("abbrev"),
                 "home_score": game.get("homeTeam", {}).get("score", 0),
+                "start_time": game.get("startTimeUTC"),
+                "venue": game.get("venue", {}).get("default"),
             })
         
         return games
