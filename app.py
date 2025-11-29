@@ -4,6 +4,7 @@ import altair as alt
 import datetime
 import glob
 from pathlib import Path
+from dvp_algorithm import calculate_dvp_metrics, get_matchup_dvp, get_position_display
 
 # --- 1. Refined Minimalist Styling with Mobile Responsiveness ---
 def load_minimalist_style():
@@ -320,10 +321,25 @@ def create_secondary_chart(data: pl.DataFrame, y_col: str, title: str, avg_val: 
     
     st.altair_chart(chart, use_container_width=True, theme="streamlit")
 
-# --- 4. Compute Player Stats ---
+# --- 4. Compute DvP Metrics ---
 @st.cache_data
-def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataFrame, 
-                               selected_date, teams: list, player_type: str, 
+def compute_dvp_data(full_df: pl.DataFrame, schedule_df: pl.DataFrame, stat_col: str, season_id: int):
+    """Compute DvP metrics for the current season."""
+    # Join full_df with schedule to get season info
+    df_with_season = full_df.join(
+        schedule_df.select(["game_id", "season"]),
+        on="game_id",
+        how="left"
+    )
+    
+    # Calculate DvP metrics
+    dvp_df = calculate_dvp_metrics(df_with_season, stat_col, season_id)
+    return dvp_df
+
+# --- 5. Compute Player Stats ---
+@st.cache_data
+def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataFrame,
+                               selected_date, teams: list, player_type: str,
                                stat_col: str, threshold: float):
     """Compute stats for all players in specified teams - optimized with Polars."""
     hockey_today = datetime.date.today()
@@ -687,9 +703,9 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
     return (selected_date, selected_matchup, player_type, selected_stat, threshold, 
             selected_stat_label, selected_player_id, player_pos_map.get(selected_player_id))
 
-def render_matchup_overview(full_df, player_roster_df, selected_date, selected_matchup, 
+def render_matchup_overview(full_df, player_roster_df, schedule_df, selected_date, selected_matchup,
                            player_type, stat_col, threshold, stat_label):
-    """Render matchup overview table with Mobile optimization."""
+    """Render matchup overview table with Mobile optimization and DvP."""
     st.header("Matchup Overview")
     
     # 1. Mobile View Toggle
@@ -702,6 +718,11 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
     away_team, home_team = selected_matchup.split(" @ ")
     teams = [home_team, away_team]
     
+    # Compute DvP data for current season
+    current_season = 20242025  # This should be dynamic based on selected_date
+    with st.spinner("Computing DvP metrics..."):
+        dvp_df = compute_dvp_data(full_df, schedule_df, stat_col, current_season)
+    
     with st.spinner("Computing player statistics..."):
         stats_df = compute_player_stats_table(
             full_df, player_roster_df, selected_date, teams, player_type, stat_col, threshold
@@ -711,6 +732,32 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
         st.warning("No player data available for this matchup.")
         return
     
+    # Add DvP information to stats_df
+    # For each player, get the DvP info for their position vs the opponent
+    dvp_info = []
+    for row in stats_df.iter_rows(named=True):
+        player_team = row["Team"]
+        player_pos = row["Pos"]
+        opponent_team = away_team if player_team == home_team else home_team
+        
+        # Get DvP info
+        matchup_dvp = get_matchup_dvp(dvp_df, player_team, opponent_team, player_pos, stat_col)
+        dvp_info.append({
+            "Player": row["Player"],
+            "Team": row["Team"],
+            "Pos": row["Pos"],
+            "DvP": matchup_dvp["dvp_formatted"],
+            "DvP_Rank": matchup_dvp["dvp_rank"]
+        })
+    
+    # Convert DvP info to DataFrame and join back
+    dvp_additions = pl.DataFrame(dvp_info)
+    stats_df = stats_df.join(
+        dvp_additions.select(["Player", "DvP", "DvP_Rank"]),
+        on="Player",
+        how="left"
+    )
+    
     stats_df = stats_df.sort("L10 %", descending=True, nulls_last=True)
     
     # 2. Dynamic Column Configuration
@@ -719,6 +766,8 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
         "Team": st.column_config.TextColumn("Team", width="small"),
         "Pos": st.column_config.TextColumn("Pos", width="small"),
         "Line": st.column_config.NumberColumn("Line", format="%.1f"),
+        "DvP": st.column_config.TextColumn("DvP", width="small", help="Defense vs Position - how opponent defense affects this position"),
+        "DvP_Rank": st.column_config.NumberColumn("DvP Rank", width="small", format="%d", help="Rank of opponent defense vs this position (1=best, 32=worst)"),
         "player_id": None
     }
 
@@ -743,11 +792,11 @@ def render_matchup_overview(full_df, player_roster_df, selected_date, selected_m
     }
 
     if mobile_view:
-        # Reduced columns for mobile
-        visible_cols = ["player_id", "Player", "Team", "Line", "L5 (Formatted)", "L10 (Formatted)", "L20 (Formatted)", "Season %"]
+        # Reduced columns for mobile (include DvP)
+        visible_cols = ["player_id", "Player", "Team", "Pos", "Line", "DvP", "DvP_Rank", "L5 (Formatted)", "L10 (Formatted)", "Season %"]
         final_config = {**base_config, **l_stats, "Season %": st.column_config.NumberColumn("Szn %", format="%.0f%%")}
     else:
-        # All columns for desktop
+        # All columns for desktop (include DvP)
         visible_cols = stats_df.columns
         final_config = {**base_config, **l_stats, **season_stats}
 
@@ -937,7 +986,7 @@ def render_main_content(full_df, schedule_df, player_roster_df, selected_date,
         st.dataframe(analysis_df.head(50), use_container_width=True, hide_index=True)
 
 def main():
-    st.set_page_config(layout="wide", page_title="NHL Dashboard v2")
+    st.set_page_config(layout="wide", page_title="NHL Dashboard")
     load_minimalist_style()
 
     # Initialize session state
@@ -980,8 +1029,8 @@ def main():
             st.rerun()
     else:
         render_matchup_overview(
-            full_df, player_roster_df, 
-            selected_date, selected_matchup, player_type, 
+            full_df, player_roster_df, schedule_df,
+            selected_date, selected_matchup, player_type,
             stat, thresh, stat_label
         )
 
