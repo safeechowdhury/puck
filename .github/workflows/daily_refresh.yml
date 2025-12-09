@@ -33,7 +33,7 @@ jobs:
     - name: Run Data Pipeline
       run: |
         # Runs the pipeline in refresh mode
-        # We look back 2 days to ensure late-night West Coast games are captured
+        # We look back 7 days to ensure any stat changes are properly tracked
         python nhl_pipeline.py refresh --days 7
 
     - name: Commit and Push changes
