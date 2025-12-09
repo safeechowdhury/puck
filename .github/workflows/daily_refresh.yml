@@ -34,7 +34,7 @@ jobs:
       run: |
         # Runs the pipeline in refresh mode
         # We look back 2 days to ensure late-night West Coast games are captured
-        python nhl_pipeline.py refresh --days 2
+        python nhl_pipeline.py refresh --days 7
 
     - name: Commit and Push changes
       run: |
