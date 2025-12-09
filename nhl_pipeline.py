@@ -742,7 +742,7 @@ def aggregate_pbp_stats(raw_pbp_df: pl.DataFrame) -> pl.DataFrame:
             "player_id"
         ],
         index=[
-            "game_id", "event_type", "situation_code", "duration", 
+            "game_id", "event_type", "situation_code", "duration",
             "event_owner_team_id", "home_team_id", "away_team_id",
             "is_ppg_event", "is_gwg_event"  # Carry the flags through
         ],
@@ -750,10 +750,16 @@ def aggregate_pbp_stats(raw_pbp_df: pl.DataFrame) -> pl.DataFrame:
         value_name="player_id"
     ).drop_nulls(subset=["player_id"])
     
+    # FIX: Ensure event_role is string type to prevent type mismatch in aggregation
+    df_long = df_long.with_columns([
+        pl.col("event_role").cast(pl.Utf8).alias("event_role")
+    ])
+    
     if df_long.is_empty():
         return pl.DataFrame()
-
+    
     # --- AGGREGATION ---
+    
     df_pbp_stats = df_long.group_by(["game_id", "player_id"]).agg([
         # Goals
         pl.col("event_type").filter(
