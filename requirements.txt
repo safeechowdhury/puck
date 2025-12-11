@@ -3,3 +3,5 @@ polars
 httpx
 altair
 pandas
+selenium
+webdriver-manager
