@@ -123,6 +123,7 @@ PBP_RAW_SCHEMA = {
     "player_id": pl.Int64,
     "home_score": pl.Int32,
     "away_score": pl.Int32,
+    "period_type": pl.Utf8,
 }
 
 PLAYER_ROSTER_SCHEMA = {
@@ -607,6 +608,7 @@ async def fetch_game_pbp(
                     "player_id": details.get("playerId"),
                     "home_score": details.get("homeScore"),
                     "away_score": details.get("awayScore"),
+                    "period_type": play.get("periodDescriptor", {}).get("periodType", "REG"),
                 })
             
             if not events:
@@ -652,6 +654,11 @@ def aggregate_pbp_stats(raw_pbp_df: pl.DataFrame) -> pl.DataFrame:
     if raw_pbp_df.is_empty():
         return pl.DataFrame()
     
+    # FILTER: Exclude Shootout events
+    raw_pbp_df = raw_pbp_df.filter(pl.col("period_type") != "SO")
+    if raw_pbp_df.is_empty():
+        return pl.DataFrame()
+
     # --- PRE-CALCULATE POWER PLAY LOGIC (BEFORE UNPIVOT) ---
     # Situation Code Format: [AwayGoalie][AwaySkaters][HomeSkaters][HomeGoalie]
     
@@ -1086,7 +1093,8 @@ async def validate_goals_for_player(player_name: str, days_back: int = 7):
         # Goals specifically
         df_goals = df_player_events.filter(
             (pl.col("event_type") == "goal") &
-            (pl.col("scoring_player_id") == player_id)
+            (pl.col("scoring_player_id") == player_id) &
+            (pl.col("period_type") != "SO")
         )
         
         logger.info(f"\nGOALS BY GAME (from raw PBP):")
