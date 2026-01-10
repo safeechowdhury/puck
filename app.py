@@ -4,7 +4,25 @@ import altair as alt
 import datetime
 import glob
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from dvp_algorithm import calculate_dvp_metrics, get_matchup_dvp, get_position_display
+
+
+def get_hockey_date():
+    """
+    Returns the current 'hockey date' in Eastern Time.
+    
+    NHL games that run late (especially West Coast games) can end after midnight ET.
+    This function considers games as 'today' until 5 AM ET the next morning.
+    For example, at 2 AM ET on January 10th, the hockey date is still January 9th.
+    """
+    eastern = ZoneInfo("America/New_York")
+    now_eastern = datetime.datetime.now(eastern)
+    
+    # If it's before 5 AM, consider it still the previous day's games
+    if now_eastern.hour < 5:
+        return (now_eastern - datetime.timedelta(days=1)).date()
+    return now_eastern.date()
 
 # --- 1. Refined Minimalist Styling with Mobile Responsiveness ---
 def load_minimalist_style():
@@ -342,7 +360,7 @@ def compute_player_stats_table(full_df: pl.DataFrame, player_roster_df: pl.DataF
                                selected_date, teams: list, player_type: str,
                                stat_col: str, threshold: float):
     """Compute stats for all players in specified teams - optimized with Polars."""
-    hockey_today = datetime.date.today()
+    hockey_today = get_hockey_date()
     is_future_game = selected_date >= hockey_today
     
     # Get player list
@@ -590,7 +608,7 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
     st.sidebar.header("Controls")
 
     # 1. Date
-    selected_date = st.sidebar.date_input("Date", st.session_state.get("selected_date", datetime.date.today()))
+    selected_date = st.sidebar.date_input("Date", st.session_state.get("selected_date", get_hockey_date()))
     st.session_state.selected_date = selected_date
 
     # 2. Matchup (sorted by game_id)
@@ -648,7 +666,7 @@ def render_sidebar(full_df, schedule_df, player_roster_df):
     threshold = st.sidebar.number_input("Threshold", min_value=0.5, step=1.0, value=default_val)
     
     # 6. Player (build list)
-    hockey_today = datetime.date.today()
+    hockey_today = get_hockey_date()
     is_future_game = selected_date >= hockey_today
     away_team, home_team = selected_matchup.split(" @ ")
     
